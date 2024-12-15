@@ -1,3 +1,5 @@
+import typing
+
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -17,6 +19,6 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-async def get_session():
+async def get_session() -> typing.AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session

@@ -1,11 +1,12 @@
 [project]
-name = "fastapi-testcontainer-async"
+name = "fastapi-testcontainer-asyncpg"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12.6"
 dependencies = [
     "aiosqlite>=0.20.0",
+    "asyncpg>=0.30.0",
     "fastapi[standard]>=0.115.6",
     "pytest>=8.3.4",
     "pytest-asyncio>=0.24.0",

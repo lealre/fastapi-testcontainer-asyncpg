@@ -18,11 +18,8 @@ def postgres_container():
         yield postgres
 
 
-BASE_URL = 'http://test'
-
-
 @pytest_asyncio.fixture
-async def async_session(postgres_container):
+async def async_session(postgres_container: PostgresContainer):
     async_db_url = postgres_container.get_connection_url()
     async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
@@ -37,17 +34,17 @@ async def async_session(postgres_container):
         expire_on_commit=False,
     )
 
-    async with async_session() as as_session:
-        yield as_session
+    async with async_session() as session:
+        yield session
 
 
 @pytest_asyncio.fixture
-async def async_client(async_session):
+async def async_client(async_session: async_sessionmaker[AsyncSession]):
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
 
     async with AsyncClient(
-        transport=_transport, base_url=BASE_URL, follow_redirects=True
+        transport=_transport, base_url='http://test', follow_redirects=True
     ) as client:
         yield client
 

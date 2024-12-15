@@ -30,65 +30,60 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get('/tickets/all', response_model=ListTickets)
 async def get_all_tickets(session: SessionDep):
-    tickets = await session.scalars(
-        select(Ticket)
-    )
+    async with session.begin():
+        tickets = await session.scalars(select(Ticket))
 
     all_tickets = tickets.all()
 
     return {'tickets': all_tickets}
 
 
-@app.post('/create', response_model=TicketResponse)
+@app.post('/create', response_model=TicketResponse, status_code=HTTPStatus.CREATED)
 async def create_ticket(session: SessionDep, ticket_in: TicketRequestCreate):
     new_ticket = Ticket(**ticket_in.model_dump())
 
-    session.add(new_ticket)
-    await session.commit()
-    await session.refresh(new_ticket)
+    async with session.begin():
+        session.add(new_ticket)
+        await session.commit()
+
+    async with session.begin():
+        await session.refresh(new_ticket)
 
     return new_ticket
 
 
-@app.post('/tickets/buy/{ticket_id}', response_model=TicketResponse)
+@app.post('/tickets/buy', response_model=TicketResponse)
 async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
-
-    ticket_db = await session.scalar(
-        select(Ticket).where(Ticket.id == ticket_in.ticket_id)
-    )
+    async with session.begin():
+        ticket_db = await session.scalar(
+            select(Ticket).where(Ticket.id == ticket_in.ticket_id)
+        )
 
     if not ticket_db:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail='Ticket not found'
-        )
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Ticket was not found')
 
-    if ticket_db.is_sold:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail='Ticket already sold'
-        )
-
-    stm = (
-        update(Ticket)
-        .where(
-            and_(
-                Ticket.id == ticket_in.ticket_id,
-                Ticket.is_sold == False,    # noqa: E712
+    async with session.begin():
+        stm = (
+            update(Ticket)
+            .where(
+                and_(
+                    Ticket.id == ticket_in.ticket_id,
+                    Ticket.is_sold == False,  # noqa: E712
+                )
             )
-        )
-        .values(is_sold=True, sold_to=ticket_in.user)
-    )
-
-    ticket_updated = await session.execute(stm)
-    await session.commit()
-
-    if ticket_updated.rowcount == 0:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail='Ticket already sold'
+            .values(is_sold=True, sold_to=ticket_in.user)
         )
 
-    await session.refresh(ticket_db)
+        ticket_updated = await session.execute(stm)
+
+        if ticket_updated.rowcount == 0:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT, detail='Ticket has already been sold'
+            )
+
+        await session.commit()
+
+    async with session.begin():
+        await session.refresh(ticket_db)
 
     return ticket_db
