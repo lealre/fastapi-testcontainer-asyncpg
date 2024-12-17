@@ -12,13 +12,13 @@ from src.database import get_session
 from src.models import table_register
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def anyio_backend():
     return 'asyncio'
 
 
 @pytest.fixture(scope='session')
-def postgres_container():
+def postgres_container(anyio_backend):
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 

@@ -1,12 +1,9 @@
 from http import HTTPStatus
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import Ticket
-
-pytestmark = pytest.mark.anyio
 
 
 async def test_get_all_tickets_success(
