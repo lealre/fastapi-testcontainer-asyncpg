@@ -34,9 +34,9 @@ Below is the documentation example of how to use an instance of PostgreSQL, whic
 
 ## Context
 
-The objective of this repository is to test asynchronous FastAPI endpoints using an PostgesQL with an asyncrhounous driver. To achive that, besides the testconteiner, it uses [pytest](https://docs.pytest.org/en/stable/){:target="\_blank"} and [pytest-asyncio](https://pytest-asyncio.readthedocs.io/en/latest/){:target="\_blank"}.
+The objective of this repository is to test asynchronous FastAPI endpoints using PostgreSQL as a database. To achieve that, besides the `testcontainers`, it uses [`pytest`](https://docs.pytest.org/en/stable/){:target="\_blank"} and [`anyio`](https://anyio.readthedocs.io/en/stable/testing.html){:target="\_blank"}, which provides built-in support for testing applications in the form of a pytest plugin. The choice of `anyio` over `pytest-asyncio` is because FastAPI is based on Starlette, which uses AnyIO, so we don't need to install an additional package here.
 
-The the development of the routes it uses [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/){:target="\_blank"}, the async driver to SQLite.
+The development of the routes uses [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/){:target="\_blank"}, the async driver for SQLite.
 
 Below are all the dependencies used to run the example.
 
@@ -45,12 +45,11 @@ aiosqlite>=0.20.0
 asyncpg>=0.30.0
 fastapi[standard]>=0.115.6
 pytest>=8.3.4
-pytest-asyncio>=0.24.0
 sqlalchemy>=2.0.36
 testcontainers>=4.8.2
 ```
 
-The README contains all the steps to run it locally using [uv](https://docs.astral.sh/uv/){:target="\_blank"}.
+The repository README contains all the steps to run it locally using [uv](https://docs.astral.sh/uv/){:target="\_blank"}.
 
 Below is how the example is structured:
 
@@ -71,13 +70,13 @@ Below is how the example is structured:
 
 ## API routes example
 
-This section will show the endpoints create for later tests. For this example it was created 3 simple routes simulating a ticketing sell system:
+This section will show the endpoints created for later tests. For this example, three simple routes were created to simulate a ticketing sell system:
 
 - `GET /tickets/all` - To list all the available tickets
 - `POST /tickets/create` - To create a new ticket to sell
 - `POST /tickets/buy` - To buy an available ticket to sell
 
-In the database, beside the `id` field, the ticket table has: a `price` field; a boolean field `is_sold` to identify if it's sold or not; and a `sold_to` field to identify to who was sold the ticket. The `models.py` file contains these informations, using the [`SQLAlchemy`](https://www.sqlalchemy.org/){:target="\_blank"} ORM.
+In the database, besides the `id` field, the ticket table has: a `price` field, a boolean field `is_sold` to identify if it's sold or not, and a `sold_to` field to identify who the ticket was sold to. The `models.py` file contains this information, using the [`SQLAlchemy`](https://www.sqlalchemy.org/){:target="\_blank"} ORM.
 
 ```py title="src/models.py" linenums="1"
 from sqlalchemy.orm import Mapped, mapped_column, registry
@@ -124,7 +123,7 @@ async def get_session() -> typing.AsyncGenerator[AsyncSession, None]:
         yield session
 ```
 
-The last file before to create the routes is the `schemas.py`, that will contain all the [pydantic](https://docs.pydantic.dev/latest/){:target="\_blank"} models.
+The last file before to create the routes is the `schemas.py`, that will contain all the [Pydantic](https://docs.pydantic.dev/latest/){:target="\_blank"} models.
 
 ```py title="src/schemas.py" linenums="1"
 from pydantic import BaseModel
@@ -153,9 +152,9 @@ class ListTickets(BaseModel):
     tickets: list[TicketResponse]
 ```
 
-The previous three files are imported in `app.py`, that contains the API routes for this example. As mentioned before, although the objective is to test the endpoints in a PostgreSQL database, the development of the API is done by using SQLite to avoid the necessity to have an instance of PostgreSQL running all the time.
+The previous three files are imported in `app.py`, which contains the API routes for this example. As mentioned before, although the objective is to test the endpoints in a PostgreSQL database, the development of the API is done using SQLite to avoid the necessity of having an instance of PostgreSQL running all the time.
 
-To keep it simple and avoid using database migrations, the database creation is handled using the [lifespan events](https://fastapi.tiangolo.com/advanced/events/){:target="\_blank"}. Here, it will just guarantee that every time we run the application, a database will be created in case it's not yet.
+To keep it simple and avoid using database migrations, the database creation is handled using the [lifespan events](https://fastapi.tiangolo.com/advanced/events/){:target="\_blank"}. Here, it will just guarantee that every time we run the application, a database will be created in case it doesn't exist yet.
 
 ```py title="src/app.py" linenums="1" hl_lines="18-24"
 from contextlib import asynccontextmanager
@@ -271,9 +270,9 @@ fastapi dev src/app.py
 
 ## Tests workflow
 
-To use PostgeSQL in the tests, the testcontainer will be setup in the `conftest.py`, as also the database session and the client to be used to test our endpoints.
+To use PostgreSQL in the tests, the testcontainer will be set up in `conftest.py`, along with the database session and the client required to test the endpoints.
 
-Below is a asimple schem of how it will work for each tests, where each block will represent a different function.
+Below is a simple diagram illustrating how it works for each test, where each block represents a different function.
 
 ```mermaid
 flowchart LR
@@ -292,6 +291,7 @@ flowchart LR
 
     %% Arrows from async_client to test blocks
     async_client --> test
+    async_session --> test
 
     %% Style the nodes with rounded corners
     classDef fixtureStyle rx:10, ry:10;
@@ -300,14 +300,14 @@ flowchart LR
     class postgres_container,async_session,async_client,test fixtureStyle;
 ```
 
-As we are working with the async fistures, all the funtion will have the decorator `@pytest_asyncio.fixture` assigned.
+The `postgres_container` will be passed to `async_session`, which will be used in both `async_client` and directly in the tests in some cases where we need to transact directly with the database.
 
 ## Creating the test fixtures
 
-The `postgres_container` function will create the PostgreSQL intsnace and provide the database URL to be connected in the `async_session` funtion.
+The first fixture inserted in `conftest.py` is the `anyio_backend`, highlighted in the code below. This function will be used in `postgres_container` and marked for the AnyIO pytest plugin, as well as setting `asyncio` as the backend to run the tests. This function was not included in the previous diagram because it is an AnyIO specification. You can check more details about it [here](https://anyio.readthedocs.io/en/stable/testing.html#specifying-the-backends-to-run-on).
 
-```py title="tests/conftest.py" linenums="1" hl_lines="15-18"
-import pytest_asyncio
+```py title="tests/conftest.py" linenums="1" hl_lines="15-17"
+import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -321,16 +321,26 @@ from src.database import get_session
 from src.models import table_register
 
 
-@pytest_asyncio.fixture
-def postgres_container():
+@pytest.fixture
+def anyio_backend():
+    return 'asyncio'
+```
+
+Now, in the `postgres_container`, the `anyio_backend` is passed, and all the tests that use the `postgres_container` as a fixture at some level will be marked to run asynchronously.
+
+Below is the `postgres_container` function, which will be responsible for creating the `PostgresContainer` instance from `testcontainers`. The `asyncpg` is passed as an argument in the class to specify that this will be the driver used.
+
+```py title="tests/conftest.py" linenums="20"
+@pytest.fixture
+def postgres_container(anyio_backend):
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 ```
 
-In `async_session`, it takes the url connection from the PostgresContainer object, and use it to cretae the tables inside the Database, as also the session that will establishe all conversations with the POstgreSQl instance created. The function will persist this session to be used in `async_client`, and them restarte the database to the next test.
+The `async_session` takes the connection URL from the `PostgresContainer` object returned by the `postgres_container` function and uses it to create the tables inside the database, as well as the session that will establish all interactions with the PostgreSQL instance created. The function will return and persist a session to be used, and then restore the database for the next test by deleting the tables.
 
-```py title="tests/conftest.py" linenums="21"
-@pytest_asyncio.fixture
+```py title="tests/conftest.py" linenums="26"
+@pytest.fixture
 async def async_session(postgres_container: PostgresContainer):
     async_db_url = postgres_container.get_connection_url()
     async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
@@ -352,10 +362,10 @@ async def async_session(postgres_container: PostgresContainer):
     await async_engine.dispose()
 ```
 
-The `async_client` function will create the [`AsyncClient`](https://fastapi.tiangolo.com/advanced/async-tests/), directly importted from [`HTTPX`](https://www.python-httpx.org/), and provide it to get reqeusts from our endpoints. Here, the session provided by `async_session` wil overrides the session originally used in our app as dependencie injection while the client is being used.
+The last fixture is the `async_client` function, which will create the [`AsyncClient`](https://fastapi.tiangolo.com/advanced/async-tests/), directly imported from [HTTPX](https://www.python-httpx.org/), and provide it to make requests to our endpoints. Here, the session provided by `async_session` will override the session originally used in our app as dependency injection while the client is being used.
 
-```py title="tests/conftest.py" linenums="43"
-@pytest_asyncio.fixture
+```py title="tests/conftest.py" linenums="48"
+@pytest.fixture
 async def async_client(async_session: async_sessionmaker[AsyncSession]):
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
@@ -370,7 +380,84 @@ async def async_client(async_session: async_sessionmaker[AsyncSession]):
 
 ## Running the tests
 
+With all the test fixtures created, it's now possible to write and run the tests.
+
+Below are the test examples for the `GET /tickets/all`. The first one inserts 3 records in the table using the `async_session` and then asserts if the response has a 200 status and the list returned has a length of 3. The second one tests the case where there are no records yet in the database, as the response must return a 200 status and an empty list.
+
+```py title="tests/test_routes.py" linenums="1"
+from http import HTTPStatus
+
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.models import Ticket
+
+
+async def test_get_all_tickets_success(
+    async_session: AsyncSession, async_client: AsyncClient
+):
+    ticket_data_list = [
+        {'price': 100, 'is_sold': False, 'sold_to': None},
+        {'price': 200, 'is_sold': True, 'sold_to': 'Buyer1'},
+        {'price': 150, 'is_sold': False, 'sold_to': None},
+    ]
+
+    expected_len = len(ticket_data_list)
+
+    tickets = [Ticket(**data) for data in ticket_data_list]
+
+    async with async_session.begin():
+        async_session.add_all(tickets)
+        await async_session.commit()
+
+    response = await async_client.get('/tickets/all')
+
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['tickets']) == expected_len
+
+
+async def test_get_all_tickets_when_empty(async_client: AsyncClient):
+    response = await async_client.get('/tickets/all')
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['tickets'] == []
+```
+
+In total there are 6 test, and the rest of them has the same logic. Their full implementations can be checked in the repository.
+
+Now, if we run the following command in the terminal...
+
+```bash
+pytest -vv
+```
+
+...we will see something similar to this:
+
+```
+tests/test_routes.py::test_get_all_tickets_success PASSED               [ 16%]
+tests/test_routes.py::test_get_all_tickets_when_empty PASSED            [ 33%]
+tests/test_routes.py::test_create_ticket_success PASSED                 [ 50%]
+tests/test_routes.py::test_buy_ticket_success PASSED                    [ 66%]
+tests/test_routes.py::test_buy_ticket_when_ticket_not_found PASSED      [ 83%]
+tests/test_routes.py::test_buy_ticket_when_already_sold PASSED          [100%]
+
+============================================= 6 passed in 12.31s =============================================
+```
+
+Although all the tests are very simple, it took an average of more than two seconds for each one of them to execute.
+
 ## The pytest scope
+
+```
+tests/test_routes.py::test_get_all_tickets_success PASSED               [ 16%]
+tests/test_routes.py::test_get_all_tickets_when_empty PASSED            [ 33%]
+tests/test_routes.py::test_create_ticket_success PASSED                 [ 50%]
+tests/test_routes.py::test_buy_ticket_success PASSED                    [ 66%]
+tests/test_routes.py::test_buy_ticket_when_ticket_not_found PASSED      [ 83%]
+tests/test_routes.py::test_buy_ticket_when_already_sold PASSED          [100%]
+
+============================================= 6 passed in 3.94s =============================================
+```
 
 ## Final `conftest.py`
 
