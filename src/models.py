@@ -10,4 +10,4 @@ class Ticket:
     id: Mapped[int] = mapped_column(init=False, primary_key=True)
     price: Mapped[int]
     is_sold: Mapped[bool] = mapped_column(default=False)
-    sold_to: Mapped[str | None] = mapped_column(nullable=True, default=None)
+    sold_to: Mapped[str] = mapped_column(nullable=True, default=None)

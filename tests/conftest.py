@@ -37,6 +37,8 @@ async def async_session(postgres_container: PostgresContainer):
     async with async_session() as session:
         yield session
 
+    await async_engine.dispose()
+
 
 @pytest_asyncio.fixture
 async def async_client(async_session: async_sessionmaker[AsyncSession]):

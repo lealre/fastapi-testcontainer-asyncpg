@@ -21,6 +21,9 @@ dependencies = [
 pythonpath = '.'
 asyncio_mode = 'auto'
 
+[tool.ruff]
+line-length = 79
+
 [tool.ruff.lint]
 preview = true
 select = ['I', 'F', 'E', 'W', 'PL', 'PT']
@@ -28,3 +31,4 @@ select = ['I', 'F', 'E', 'W', 'PL', 'PT']
 [tool.ruff.format]
 preview = true
 quote-style = 'single'
+

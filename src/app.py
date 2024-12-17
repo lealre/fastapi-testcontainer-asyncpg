@@ -14,8 +14,6 @@ from src.schemas import (
     TicketResponse,
 )
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,6 +26,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
 @app.get('/tickets/all', response_model=ListTickets)
 async def get_all_tickets(session: SessionDep):
     async with session.begin():
@@ -38,7 +39,11 @@ async def get_all_tickets(session: SessionDep):
     return {'tickets': all_tickets}
 
 
-@app.post('/create', response_model=TicketResponse, status_code=HTTPStatus.CREATED)
+@app.post(
+    '/tickets/create',
+    response_model=TicketResponse,
+    status_code=HTTPStatus.CREATED,
+)
 async def create_ticket(session: SessionDep, ticket_in: TicketRequestCreate):
     new_ticket = Ticket(**ticket_in.model_dump())
 
@@ -60,7 +65,9 @@ async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
         )
 
     if not ticket_db:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail='Ticket was not found')
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='Ticket was not found'
+        )
 
     async with session.begin():
         stm = (
@@ -78,7 +85,8 @@ async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
 
         if ticket_updated.rowcount == 0:
             raise HTTPException(
-                status_code=HTTPStatus.CONFLICT, detail='Ticket has already been sold'
+                status_code=HTTPStatus.CONFLICT,
+                detail='Ticket has already been sold',
             )
 
         await session.commit()
