@@ -7,17 +7,17 @@ hide:
 
 ![image.svg](image.svg)
 
-When I first learned about [testcontainers](https://testcontainers.com/){:target="\_blank"}, I wanted to know how to integrate it with [`asyncpg`](https://magicstack.github.io/asyncpg/current/){:target="\_blank"}, an asynchronous driver for PostgreSQL. At first look, I came across [this text](https://www.linkedin.com/pulse/utilizando-testcontainers-fastapi-guilherme-de-carvalho-carneiro-9cmlf/){:target="\_blank"} from [Guilherme](https://www.linkedin.com/in/guilhermecarvalho/){:target="\_blank"}, who worked on it instantly. Based on that, I decided to write this simple repository with an example application.
+When I first got to know about [testcontainers](https://testcontainers.com/){:target="\_blank"}, I wanted to learn how to integrate it with [`asyncpg`](https://magicstack.github.io/asyncpg/current/){:target="\_blank"}, an asynchronous driver for PostgreSQL, for testing asynchronous routes in FastAPI. In an initial reference search, I found [this article](https://www.linkedin.com/pulse/utilizando-testcontainers-fastapi-guilherme-de-carvalho-carneiro-9cmlf/){:target="\_blank"} by [Guilherme](https://www.linkedin.com/in/guilhermecarvalho/){:target="\_blank"}, and based on his article, I decided to write this example application.
 
 You can check the complete repository [here](https://github.com/lealre/fastapi-testcontainer-asyncpg){:target="\_blank"}.
 
-TL;DR: The full `conftest.py` setup is available [here](Add link here).
+TL;DR: The full `conftest.py` setup is available [here](#final-version-of-test-fixtures).
 
 ## Testcontainers
 
-Testcontainers is an open-source library for providing lightweight instances of anything that can run in a Docker container. It was originally implemented for .NET, Go, Java, and Node.js, but it was extended to other programming languages through community projects, including Python: [testcontainer-python docs](https://testcontainers-python.readthedocs.io/en/latest/){:target="\_blank"}.
+Testcontainers is an open-source library for providing lightweight instances of anything that can run in a Docker container. It was originally implemented for .NET, Go, Java, and Node.js but has since been extended to other programming languages through community projects, including Python: [testcontainer-python](https://testcontainers-python.readthedocs.io/en/latest/){:target="\_blank"}.
 
-Below is the documentation example of how to use an instance of PostgreSQL, which uses [`psycopg2`](https://github.com/psycopg/psycopg2){:target="\_blank"} as the default driver.
+Below is a documentation example of how to use an instance of PostgreSQL, which uses [`psycopg2`](https://github.com/psycopg/psycopg2){:target="\_blank"} as the default driver.
 
 ```py
 >>> from testcontainers.postgres import PostgresContainer
@@ -36,7 +36,7 @@ Below is the documentation example of how to use an instance of PostgreSQL, whic
 
 The objective of this repository is to test asynchronous FastAPI endpoints using PostgreSQL as a database. To achieve that, besides the `testcontainers`, it uses [`pytest`](https://docs.pytest.org/en/stable/){:target="\_blank"} and [`anyio`](https://anyio.readthedocs.io/en/stable/testing.html){:target="\_blank"}, which provides built-in support for testing applications in the form of a pytest plugin. The choice of `anyio` over `pytest-asyncio` is because FastAPI is based on Starlette, which uses AnyIO, so we don't need to install an additional package here.
 
-The development of the routes uses [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/){:target="\_blank"}, the async driver for SQLite.
+The development of the API routes uses [aiosqlite](https://aiosqlite.omnilib.dev/en/stable/){:target="\_blank"}, the async driver for SQLite.
 
 Below are all the dependencies used to run the example.
 
@@ -68,7 +68,7 @@ Below is how the example is structured:
 1. Where the example API is written using FastAPI.
 2. Where API test fixtures are written, from the PostgreSQL instance to the client. You can learn more about the `conftest.py` file in the <a href="https://docs.pytest.org/en/stable/reference/fixtures.html#conftest-py-sharing-fixtures-across-multiple-files" target="_blank">pytest docs</a>.
 
-## API routes example
+## API routes implementation
 
 This section will show the endpoints created for later tests. For this example, three simple routes were created to simulate a ticketing sell system:
 
@@ -94,7 +94,7 @@ class Ticket:
     sold_to: Mapped[str] = mapped_column(nullable=True, default=None)
 ```
 
-The `database.py` contains the connection with the database, as also the `get_session()` generator, responsible for creating asynchronous sessions for performing transactions in the database.
+The `database.py` contains the database connection, as well as the `get_session()` generator, responsible for creating asynchronous sessions to perform transactions in the database.
 
 ```python title="src/database.py" linenums="1"
 import typing
@@ -123,7 +123,7 @@ async def get_session() -> typing.AsyncGenerator[AsyncSession, None]:
         yield session
 ```
 
-The last file before to create the routes is the `schemas.py`, that will contain all the [Pydantic](https://docs.pydantic.dev/latest/){:target="\_blank"} models.
+The last file before creating the routes is the `schemas.py`, which will contain all the [Pydantic](https://docs.pydantic.dev/latest/){:target="\_blank"} models.
 
 ```py title="src/schemas.py" linenums="1"
 from pydantic import BaseModel
@@ -152,9 +152,9 @@ class ListTickets(BaseModel):
     tickets: list[TicketResponse]
 ```
 
-The previous three files are imported in `app.py`, which contains the API routes for this example. As mentioned before, although the objective is to test the endpoints in a PostgreSQL database, the development of the API is done using SQLite to avoid the necessity of having an instance of PostgreSQL running all the time.
+The previous three files are imported in `app.py`, which contains the API routes for this example. As mentioned earlier, although the objective is to test the endpoints with a PostgreSQL database, the development of the API uses SQLite to avoid the need for a PostgreSQL instance running constantly.
 
-To keep it simple and avoid using database migrations, the database creation is handled using the [lifespan events](https://fastapi.tiangolo.com/advanced/events/){:target="\_blank"}. Here, it will just guarantee that every time we run the application, a database will be created in case it doesn't exist yet.
+To keep things simple and avoid database migrations, the database creation is handled using [lifespan events](https://fastapi.tiangolo.com/advanced/events/){:target="\_blank"}. This guarantees that every time we run the application, a database will be created if it doesn't already exist.
 
 ```py title="src/app.py" linenums="1" hl_lines="18-24"
 from contextlib import asynccontextmanager
@@ -185,7 +185,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 ```
 
-Below are the routes implementation, as also the `SessionDep` to be used as [dependency injection](https://fastapi.tiangolo.com/tutorial/dependencies/){:target="\_blank"} in each route.
+Below are the route implementations, as well as the `SessionDep` to be used as [dependency injection](https://fastapi.tiangolo.com/tutorial/dependencies/){:target="\_blank"} in each route.
 
 ```py title="src/app.py" linenums="27" hl_lines="3"
 ...
@@ -262,17 +262,25 @@ async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
 
 ```
 
-Now, running the command below in the terminal, the application should be available at `http://127.0.0.1:8000`.
+Now, by running the command below in the terminal, the application should be available at `http://127.0.0.1:8000`.
 
-```bash
-fastapi dev src/app.py
-```
+=== "pip"
+
+    ```bash
+    python -m fastapi dev src/app.py
+    ```
+
+=== "uv"
+
+    ``` bash
+    uv run -m fastapi dev src/app.py
+    ```
 
 ## Tests workflow
 
 To use PostgreSQL in the tests, the testcontainer will be set up in `conftest.py`, along with the database session and the client required to test the endpoints.
 
-Below is a simple diagram illustrating how it works for each test, where each block represents a different function.
+Below is a simple diagram illustrating how it works **for each test**, where each block represents a different function.
 
 ```mermaid
 flowchart LR
@@ -300,7 +308,7 @@ flowchart LR
     class postgres_container,async_session,async_client,test fixtureStyle;
 ```
 
-The `postgres_container` will be passed to `async_session`, which will be used in both `async_client` and directly in the tests in some cases where we need to transact directly with the database.
+The `postgres_container` will be passed to `async_session`, which will be used in both `async_client` and directly in the tests, in cases where we need to transact directly with the database.
 
 ## Creating the test fixtures
 
@@ -326,9 +334,9 @@ def anyio_backend():
     return 'asyncio'
 ```
 
-Now, in the `postgres_container`, the `anyio_backend` is passed, and all the tests that use the `postgres_container` as a fixture at some level will be marked to run asynchronously.
+Now, in the `postgres_container`, the `anyio_backend` is passed, and all the tests that use the `postgres_container` as a fixture at any level will be marked to run asynchronously.
 
-Below is the `postgres_container` function, which will be responsible for creating the `PostgresContainer` instance from `testcontainers`. The `asyncpg` is passed as an argument in the class to specify that this will be the driver used.
+Below is the `postgres_container` function, which will be responsible for creating the `PostgresContainer` instance from `testcontainers`. The `asyncpg` driver is passed as an argument to specify that it will be the driver used.
 
 ```py title="tests/conftest.py" linenums="20"
 @pytest.fixture
@@ -337,7 +345,7 @@ def postgres_container(anyio_backend):
         yield postgres
 ```
 
-The `async_session` takes the connection URL from the `PostgresContainer` object returned by the `postgres_container` function and uses it to create the tables inside the database, as well as the session that will establish all interactions with the PostgreSQL instance created. The function will return and persist a session to be used, and then restore the database for the next test by deleting the tables.
+The `async_session` takes the connection URL from the `PostgresContainer` object returned by the `postgres_container` function and uses it to create the tables inside the database, as well as the session that will handle all interactions with the PostgreSQL instance created. The function will return and persist a session to be used, and then restore the database for the next test by deleting the tables.
 
 ```py title="tests/conftest.py" linenums="26"
 @pytest.fixture
@@ -362,7 +370,7 @@ async def async_session(postgres_container: PostgresContainer):
     await async_engine.dispose()
 ```
 
-The last fixture is the `async_client` function, which will create the [`AsyncClient`](https://fastapi.tiangolo.com/advanced/async-tests/), directly imported from [HTTPX](https://www.python-httpx.org/), and provide it to make requests to our endpoints. Here, the session provided by `async_session` will override the session originally used in our app as dependency injection while the client is being used.
+The last fixture is the `async_client` function, which will create the [`AsyncClient`](https://fastapi.tiangolo.com/advanced/async-tests/), directly imported from [HTTPX](https://www.python-httpx.org/), and provide it to make requests to our endpoints. Here, the session provided by `async_session` will override the session originally used in our app as a dependency injection while the client is being used.
 
 ```py title="tests/conftest.py" linenums="48"
 @pytest.fixture
@@ -425,11 +433,35 @@ async def test_get_all_tickets_when_empty(async_client: AsyncClient):
 
 In total there are 6 test, and the rest of them has the same logic. Their full implementations can be checked in the repository.
 
+Adding the following setting in `pyproject.toml` or `pytest.ini` will inform pytest to add the root directory to the Python search path when running tests.
+
+=== "pyproject.toml"
+
+    ``` toml
+    [tool.pytest.ini_options]
+    pythonpath = '.'
+    ```
+
+=== "pytest.ini"
+
+    ```
+    [pytest]
+    pythonpath = .
+    ```
+
 Now, if we run the following command in the terminal...
 
-```bash
-pytest -vv
-```
+=== "pip"
+
+    ``` bash
+    pytest -vv
+    ```
+
+=== "uv"
+
+    ``` bash
+    uv run pytest -vv
+    ```
 
 ...we will see something similar to this:
 
@@ -444,9 +476,90 @@ tests/test_routes.py::test_buy_ticket_when_already_sold PASSED          [100%]
 ============================================= 6 passed in 12.31s =============================================
 ```
 
-Although all the tests are very simple, it took an average of more than two seconds for each one of them to execute.
+Although all the tests are very simple, it took an average of more than two seconds for each one of them to execute. This happens because for each test, a new PostgreSQL Docker instance is being created, as shown in [Tests workflow](#tests-workflow).
 
-## The pytest scope
+To make the tests faster, one option is to create just one PostgreSQL Docker instance and use it for all the tests by configuring the `@pytest.fixture(scope='')`.
+
+## The pytest fixture scope
+
+Fixtures requiring network access depend on connectivity and are usually time-expensive to create. By setting the `scope` in `@pytest.fixture`, we can tell pytest how to manage the fixture's creation and reuse.
+
+Fixtures are created when first requested by a test and are destroyed based on their `scope`. Some of the scope options that can be set are:
+
+- `function`: the default scope, the fixture is destroyed at the end of the test.
+- `class`: the fixture is destroyed during the teardown of the last test in the class.
+- `module`: the fixture is destroyed during the teardown of the last test in the module.
+- `package`: the fixture is destroyed during the teardown of the last test in the package.
+- `session`: the fixture is destroyed at the end of the test session.
+
+As we want to create just one Docker instance and reuse it for all the tests, we changed the `@pytest.fixture` in the `conftest.py` file in the following highlighted lines.
+
+```py title="conftest.py" linenums="25" hl_lines="1 6"
+@pytest.fixture(scope='session')
+def anyio_backend():
+    return 'asyncio'
+
+
+@pytest.fixture(scope='session')
+def postgres_container(anyio_backend):
+    with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
+        yield postgres
+```
+
+Now, every time we run the tests, we will have a similar workflow like the one below, where the `postgres_container` fixture will be created at the beginning of the test session, persist to be used in all the other fixtures, and be destroyed only when all the tests finish.
+
+```mermaid
+flowchart LR
+    %% Nodes for fixtures
+    postgres_container["postgres_container"]
+    async_session["async_session"]
+    async_client["async_client"]
+    test["Test 1"]
+    async_session_2["async_session"]
+    async_client_2["async_client"]
+    test_2["Test 2"]
+    async_session_n["async_session"]
+    async_client_n["async_client"]
+    test_n["Test N"]
+
+    subgraph All fixtures
+        direction LR
+
+        subgraph Function fixtures
+            direction LR
+            async_session --> async_client
+            async_session_2 --> async_client_2
+            async_session_n --> async_client_n
+        end
+
+        subgraph Session Fixture
+            direction LR
+            postgres_container --> async_session
+            postgres_container --> async_session_2
+            postgres_container --> async_session_n
+        end
+    end
+
+    %% Arrows from async_client to test blocks
+    async_client --> test
+    async_session --> test
+
+    async_client_2 --> test_2
+    async_session_2 --> test_2
+    async_client_n --> test_n
+    async_session_n --> test_n
+
+
+    %% Style the nodes with rounded corners
+    classDef fixtureStyle rx:10, ry:10;
+
+    %% Style the nodes
+    class postgres_container,async_session,async_client,test fixtureStyle;
+    class async_session_2,async_client_2,test_2 fixtureStyle;
+    class async_session_n,async_client_n,test_n fixtureStyle;
+```
+
+Running the tests again, we should see that the time it took to run all the tests decreases to around 4 seconds, with a median of less than one second per test.
 
 ```
 tests/test_routes.py::test_get_all_tickets_success PASSED               [ 16%]
@@ -459,8 +572,72 @@ tests/test_routes.py::test_buy_ticket_when_already_sold PASSED          [100%]
 ============================================= 6 passed in 3.94s =============================================
 ```
 
-## Final `conftest.py`
+??? note "Documentation reference links"
 
-## Conclusion
+    - [Scope: sharing fixtures across classes, modules, packages or session](https://docs.pytest.org/en/6.2.x/fixture.html#scope-sharing-fixtures-across-classes-modules-packages-or-session)
+    - [API reference](https://docs.pytest.org/en/stable/reference/reference.html#pytest.fixture)
+    - [Higher-scoped fixtures are executed first](https://docs.pytest.org/en/stable/reference/fixtures.html#higher-scoped-fixtures-are-executed-first)
 
-ERROR tests/test_routes.py::test_get_all_tickets_success - docker.errors.DockerException: Error while fetching server API version: ('Connection aborted.', FileNotFoundError(2, 'No such file or directory'))
+## Final version of test fixtures
+
+```py title="tests/conftest.py" linenums="1"
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from testcontainers.postgres import PostgresContainer
+
+from src.app import app
+from src.database import get_session
+from src.models import table_register
+
+
+@pytest.fixture(scope='session')
+def anyio_backend():
+    return 'asyncio'
+
+
+@pytest.fixture(scope='session')
+def postgres_container(anyio_backend):
+    with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
+        yield postgres
+
+
+@pytest.fixture
+async def async_session(postgres_container: PostgresContainer):
+    async_db_url = postgres_container.get_connection_url()
+    async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(table_register.metadata.drop_all)
+        await conn.run_sync(table_register.metadata.create_all)
+
+    async_session = async_sessionmaker(
+        autoflush=False,
+        bind=async_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async with async_session() as session:
+        yield session
+
+    await async_engine.dispose()
+
+
+@pytest.fixture
+async def async_client(async_session: async_sessionmaker[AsyncSession]):
+    app.dependency_overrides[get_session] = lambda: async_session
+    _transport = ASGITransport(app=app)
+
+    async with AsyncClient(
+        transport=_transport, base_url='http://test', follow_redirects=True
+    ) as client:
+        yield client
+
+    app.dependency_overrides.clear()
+
+```
