@@ -506,7 +506,7 @@ def postgres_container(anyio_backend):
         yield postgres
 ```
 
-Now, every time we run the tests, we will have a similar workflow like the one below, where the `postgres_container` fixture will be created at the beginning of the test session, persist to be used in all the other fixtures, and be destroyed only when all the tests finish.
+Now, every time we run the tests, we will follow a workflow similar to the one below, where the `postgres_container` fixture is created only once at the beginning of the test session and is reused in all other fixtures. The `async_session` and `async_client` fixtures are still created and destroyed for each test. The `postgres_container` fixture is destroyed only after all the tests have finished.
 
 ```mermaid
 flowchart LR
@@ -559,7 +559,7 @@ flowchart LR
     class async_session_n,async_client_n,test_n fixtureStyle;
 ```
 
-Running the tests again, we should see that the time it took to run all the tests decreases to around 4 seconds, with a median of less than one second per test.
+Running the tests again, we should observe that the total time to run all tests decreases to around 4 seconds, with a median of less than one second per test.
 
 ```
 tests/test_routes.py::test_get_all_tickets_success PASSED               [ 16%]
@@ -579,6 +579,8 @@ tests/test_routes.py::test_buy_ticket_when_already_sold PASSED          [100%]
     - [Higher-scoped fixtures are executed first](https://docs.pytest.org/en/stable/reference/fixtures.html#higher-scoped-fixtures-are-executed-first)
 
 ## Final version of test fixtures
+
+The final `conftest.py` is presented below:
 
 ```py title="tests/conftest.py" linenums="1"
 import pytest
