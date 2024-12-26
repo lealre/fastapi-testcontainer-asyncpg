@@ -1,5 +1,6 @@
 site_name: Testcontainers with FastAPI and asyncpg
 repo_url: https://github.com/lealre/fastapi-testcontainer-asyncpg
+repo_name: lealre/fastapi-testcontainer-asyncpg
 theme:
   name: material
   palette:
