@@ -33,8 +33,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 async def get_all_tickets(session: SessionDep):
     async with session.begin():
         tickets = await session.scalars(select(Ticket))
-
-    all_tickets = tickets.all()
+        all_tickets = tickets.all()
 
     return {'tickets': all_tickets}
 
@@ -49,10 +48,6 @@ async def create_ticket(session: SessionDep, ticket_in: TicketRequestCreate):
 
     async with session.begin():
         session.add(new_ticket)
-        await session.commit()
-
-    async with session.begin():
-        await session.refresh(new_ticket)
 
     return new_ticket
 
@@ -88,10 +83,5 @@ async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
                 status_code=HTTPStatus.CONFLICT,
                 detail='Ticket has already been sold',
             )
-
-        await session.commit()
-
-    async with session.begin():
-        await session.refresh(ticket_db)
 
     return ticket_db

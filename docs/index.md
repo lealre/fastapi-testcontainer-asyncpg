@@ -107,13 +107,11 @@ from sqlalchemy.ext.asyncio import (
 
 DATABASE_URL = 'sqlite+aiosqlite:///db.sqlite3'
 
-engine = create_async_engine(DATABASE_URL, future=True, echo=True)
+engine = create_async_engine(DATABASE_URL, echo=True)
 
 AsyncSessionLocal = async_sessionmaker(
-    autocommit=False,
-    expire_on_commit=False,
-    autoflush=True,
     bind=engine,
+    expire_on_commit=False,
     class_=AsyncSession,
 )
 
@@ -121,6 +119,7 @@ AsyncSessionLocal = async_sessionmaker(
 async def get_session() -> typing.AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
+
 ```
 
 The last file before creating the routes is the `schemas.py`, which will contain all the [Pydantic](https://docs.pydantic.dev/latest/){:target="\_blank"} models.
@@ -197,8 +196,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 async def get_all_tickets(session: SessionDep):
     async with session.begin():
         tickets = await session.scalars(select(Ticket))
-
-    all_tickets = tickets.all()
+        all_tickets = tickets.all()
 
     return {'tickets': all_tickets}
 
@@ -213,10 +211,6 @@ async def create_ticket(session: SessionDep, ticket_in: TicketRequestCreate):
 
     async with session.begin():
         session.add(new_ticket)
-        await session.commit()
-
-    async with session.begin():
-        await session.refresh(new_ticket)
 
     return new_ticket
 
@@ -252,11 +246,6 @@ async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
                 status_code=HTTPStatus.CONFLICT,
                 detail='Ticket has already been sold',
             )
-
-        await session.commit()
-
-    async with session.begin():
-        await session.refresh(ticket_db)
 
     return ticket_db
 
@@ -425,7 +414,6 @@ async def test_get_all_tickets_success(
 
     async with async_session.begin():
         async_session.add_all(tickets)
-        await async_session.commit()
 
     response = await async_client.get('/tickets/all')
 
@@ -438,6 +426,7 @@ async def test_get_all_tickets_when_empty(async_client: AsyncClient):
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()['tickets'] == []
+
 ```
 
 In total there are 6 test, and the rest of them has the same logic. Their full implementations can be checked in the repository.

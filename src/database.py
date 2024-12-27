@@ -8,13 +8,11 @@ from sqlalchemy.ext.asyncio import (
 
 DATABASE_URL = 'sqlite+aiosqlite:///db.sqlite3'
 
-engine = create_async_engine(DATABASE_URL, future=True, echo=True)
+engine = create_async_engine(DATABASE_URL, echo=True)
 
 AsyncSessionLocal = async_sessionmaker(
-    autocommit=False,
-    expire_on_commit=False,
-    autoflush=True,
     bind=engine,
+    expire_on_commit=False,
     class_=AsyncSession,
 )
 

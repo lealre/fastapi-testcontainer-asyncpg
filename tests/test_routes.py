@@ -21,7 +21,6 @@ async def test_get_all_tickets_success(
 
     async with async_session.begin():
         async_session.add_all(tickets)
-        await async_session.commit()
 
     response = await async_client.get('/tickets/all')
 
@@ -60,7 +59,6 @@ async def test_buy_ticket_success(
 
     async with async_session.begin():
         async_session.add(new_ticket)
-        await async_session.commit()
 
     response = await async_client.post(
         '/tickets/buy',
@@ -83,7 +81,6 @@ async def test_buy_ticket_when_ticket_not_found(
 
     async with async_session.begin():
         async_session.add(new_ticket)
-        await async_session.commit()
 
     response = await async_client.post(
         '/tickets/buy',
@@ -101,7 +98,6 @@ async def test_buy_ticket_when_already_sold(
 
     async with async_session.begin():
         async_session.add(new_ticket)
-        await async_session.commit()
 
     response = await async_client.post(
         '/tickets/buy', json={'ticket_id': new_ticket.id, 'user': 'other user'}
