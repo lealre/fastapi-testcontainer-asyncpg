@@ -1,3 +1,5 @@
+import typing
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
@@ -13,18 +15,22 @@ from src.models import table_register
 
 
 @pytest.fixture(scope='session')
-def anyio_backend():
+def anyio_backend() -> str:
     return 'asyncio'
 
 
 @pytest.fixture(scope='session')
-def postgres_container(anyio_backend):
+def postgres_container(
+    anyio_backend: typing.Literal['asyncio']
+) -> typing.Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 
 
 @pytest.fixture
-async def async_session(postgres_container: PostgresContainer):
+async def async_session(
+    postgres_container: PostgresContainer
+) -> typing.AsyncGenerator[AsyncSession, None]:
     async_db_url = postgres_container.get_connection_url()
     async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
@@ -46,7 +52,9 @@ async def async_session(postgres_container: PostgresContainer):
 
 
 @pytest.fixture
-async def async_client(async_session: async_sessionmaker[AsyncSession]):
+async def async_client(
+    async_session: AsyncSession
+) -> typing.AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
 

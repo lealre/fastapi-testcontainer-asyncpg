@@ -314,7 +314,9 @@ The `postgres_container` will be passed to `async_session`, which will be used i
 
 The first fixture inserted in `conftest.py` is the `anyio_backend`, highlighted in the code below. This function will be used in `postgres_container` and marked for the AnyIO pytest plugin, as well as setting `asyncio` as the backend to run the tests. This function was not included in the previous diagram because it is an AnyIO specification. You can check more details about it [here](https://anyio.readthedocs.io/en/stable/testing.html#specifying-the-backends-to-run-on).
 
-```py title="tests/conftest.py" linenums="1" hl_lines="15-17"
+```py title="tests/conftest.py" linenums="1" hl_lines="17-19"
+import typing
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
@@ -330,26 +332,31 @@ from src.models import table_register
 
 
 @pytest.fixture
-def anyio_backend():
+def anyio_backend() -> str:
     return 'asyncio'
+
 ```
 
 Now, in the `postgres_container`, the `anyio_backend` is passed, and all the tests that use the `postgres_container` as a fixture at any level will be marked to run asynchronously.
 
 Below is the `postgres_container` function, which will be responsible for creating the `PostgresContainer` instance from `testcontainers`. The `asyncpg` driver is passed as an argument to specify that it will be the driver used.
 
-```py title="tests/conftest.py" linenums="20"
+```py title="tests/conftest.py" linenums="22"
 @pytest.fixture
-def postgres_container(anyio_backend):
+def postgres_container(
+    anyio_backend: typing.Literal['asyncio']
+) -> typing.Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 ```
 
 The `async_session` takes the connection URL from the `PostgresContainer` object returned by the `postgres_container` function and uses it to create the tables inside the database, as well as the session that will handle all interactions with the PostgreSQL instance created. The function will return and persist a session to be used, and then restore the database for the next test by deleting the tables.
 
-```py title="tests/conftest.py" linenums="26"
+```py title="tests/conftest.py" linenums="30"
 @pytest.fixture
-async def async_session(postgres_container: PostgresContainer):
+async def async_session(
+    postgres_container: PostgresContainer
+) -> typing.AsyncGenerator[AsyncSession, None]:
     async_db_url = postgres_container.get_connection_url()
     async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
@@ -372,9 +379,11 @@ async def async_session(postgres_container: PostgresContainer):
 
 The last fixture is the `async_client` function, which will create the [`AsyncClient`](https://fastapi.tiangolo.com/advanced/async-tests/), directly imported from [HTTPX](https://www.python-httpx.org/), and provide it to make requests to our endpoints. Here, the session provided by `async_session` will override the session originally used in our app as a dependency injection while the client is being used.
 
-```py title="tests/conftest.py" linenums="48"
+```py title="tests/conftest.py" linenums="54"
 @pytest.fixture
-async def async_client(async_session: async_sessionmaker[AsyncSession]):
+async def async_client(
+    async_session: AsyncSession
+) -> typing.AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
 
@@ -494,16 +503,19 @@ Fixtures are created when first requested by a test and are destroyed based on t
 
 As we want to create just one Docker instance and reuse it for all the tests, we changed the `@pytest.fixture` in the `conftest.py` file in the following highlighted lines.
 
-```py title="conftest.py" linenums="25" hl_lines="1 6"
+```py title="conftest.py" linenums="17" hl_lines="1 6"
 @pytest.fixture(scope='session')
-def anyio_backend():
+def anyio_backend() -> str:
     return 'asyncio'
 
 
 @pytest.fixture(scope='session')
-def postgres_container(anyio_backend):
+def postgres_container(
+    anyio_backend: typing.Literal['asyncio']
+) -> typing.Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
+
 ```
 
 Now, every time we run the tests, we will follow a workflow similar to the one below, where the `postgres_container` fixture is created only once at the beginning of the test session and is reused in all other fixtures. The `async_session` and `async_client` fixtures are still created and destroyed for each test. The `postgres_container` fixture is destroyed only after all the tests have finished.
@@ -583,6 +595,8 @@ tests/test_routes.py::test_buy_ticket_when_already_sold PASSED          [100%]
 The final `conftest.py` is presented below:
 
 ```py title="tests/conftest.py" linenums="1"
+import typing
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
@@ -598,18 +612,22 @@ from src.models import table_register
 
 
 @pytest.fixture(scope='session')
-def anyio_backend():
+def anyio_backend() -> str:
     return 'asyncio'
 
 
 @pytest.fixture(scope='session')
-def postgres_container(anyio_backend):
+def postgres_container(
+    anyio_backend: typing.Literal['asyncio']
+) -> typing.Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 
 
 @pytest.fixture
-async def async_session(postgres_container: PostgresContainer):
+async def async_session(
+    postgres_container: PostgresContainer
+) -> typing.AsyncGenerator[AsyncSession, None]:
     async_db_url = postgres_container.get_connection_url()
     async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
@@ -631,7 +649,9 @@ async def async_session(postgres_container: PostgresContainer):
 
 
 @pytest.fixture
-async def async_client(async_session: async_sessionmaker[AsyncSession]):
+async def async_client(
+    async_session: AsyncSession
+) -> typing.AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
 
@@ -641,5 +661,4 @@ async def async_client(async_session: async_sessionmaker[AsyncSession]):
         yield client
 
     app.dependency_overrides.clear()
-
 ```
