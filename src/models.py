@@ -1,13 +1,15 @@
-from sqlalchemy.orm import Mapped, mapped_column, registry
+from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-table_register = registry()
+
+class Base(DeclarativeBase, AsyncAttrs):
+    pass
 
 
-@table_register.mapped_as_dataclass
-class Ticket:
+class Ticket(Base):
     __tablename__ = 'tickets'
 
-    id: Mapped[int] = mapped_column(init=False, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     price: Mapped[int]
     is_sold: Mapped[bool] = mapped_column(default=False)
     sold_to: Mapped[str] = mapped_column(nullable=True, default=None)

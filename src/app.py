@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import and_, select, update
 
 from src.database import AsyncSession, engine, get_session
-from src.models import Ticket, table_register
+from src.models import Base, Ticket
 from src.schemas import (
     ListTickets,
     TicketRequestBuy,
@@ -18,7 +18,7 @@ from src.schemas import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        await conn.run_sync(table_register.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)
         yield
     await engine.dispose()
 
@@ -59,12 +59,11 @@ async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
             select(Ticket).where(Ticket.id == ticket_in.ticket_id)
         )
 
-    if not ticket_db:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Ticket was not found'
-        )
+        if not ticket_db:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail='Ticket was not found'
+            )
 
-    async with session.begin():
         stm = (
             update(Ticket)
             .where(

@@ -79,16 +79,18 @@ This section will show the endpoints created for later tests. For this example, 
 In the database, besides the `id` field, the ticket table has: a `price` field, a boolean field `is_sold` to identify if it's sold or not, and a `sold_to` field to identify who the ticket was sold to. The `models.py` file contains this information, using the [`SQLAlchemy`](https://www.sqlalchemy.org/){:target="\_blank"} ORM.
 
 ```py title="src/models.py" linenums="1"
-from sqlalchemy.orm import Mapped, mapped_column, registry
+from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-table_register = registry()
+
+class Base(DeclarativeBase, AsyncAttrs):
+    pass
 
 
-@table_register.mapped_as_dataclass
-class Ticket:
+class Ticket(Base):
     __tablename__ = 'tickets'
 
-    id: Mapped[int] = mapped_column(init=False, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     price: Mapped[int]
     is_sold: Mapped[bool] = mapped_column(default=False)
     sold_to: Mapped[str] = mapped_column(nullable=True, default=None)
@@ -97,7 +99,7 @@ class Ticket:
 The `database.py` contains the database connection, as well as the `get_session()` generator, responsible for creating asynchronous sessions to perform transactions in the database.
 
 ```python title="src/database.py" linenums="1"
-import typing
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -116,7 +118,7 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-async def get_session() -> typing.AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -155,7 +157,7 @@ The previous three files are imported in `app.py`, which contains the API routes
 
 To keep things simple and avoid database migrations, the database creation is handled using [lifespan events](https://fastapi.tiangolo.com/advanced/events/){:target="\_blank"}. This guarantees that every time we run the application, a database will be created if it doesn't already exist.
 
-```py title="src/app.py" linenums="1" hl_lines="18-24"
+```py title="src/app.py" linenums="1" hl_lines="18-23"
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from typing import Annotated
@@ -164,7 +166,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import and_, select, update
 
 from src.database import AsyncSession, engine, get_session
-from src.models import Ticket, table_register
+from src.models import Base, Ticket
 from src.schemas import (
     ListTickets,
     TicketRequestBuy,
@@ -176,7 +178,7 @@ from src.schemas import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        await conn.run_sync(table_register.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)
         yield
     await engine.dispose()
 
@@ -222,12 +224,11 @@ async def get_ticket_by_id(session: SessionDep, ticket_in: TicketRequestBuy):
             select(Ticket).where(Ticket.id == ticket_in.ticket_id)
         )
 
-    if not ticket_db:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail='Ticket was not found'
-        )
+        if not ticket_db:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail='Ticket was not found'
+            )
 
-    async with session.begin():
         stm = (
             update(Ticket)
             .where(
@@ -303,8 +304,9 @@ The `postgres_container` will be passed to `async_session`, which will be used i
 
 The first fixture inserted in `conftest.py` is the `anyio_backend`, highlighted in the code below. This function will be used in `postgres_container` and marked for the AnyIO pytest plugin, as well as setting `asyncio` as the backend to run the tests. This function was not included in the previous diagram because it is an AnyIO specification. You can check more details about it [here](https://anyio.readthedocs.io/en/stable/testing.html#specifying-the-backends-to-run-on).
 
-```py title="tests/conftest.py" linenums="1" hl_lines="17-19"
-import typing
+```py title="tests/conftest.py" linenums="1" hl_lines="18-20"
+from collections.abc import AsyncGenerator, Generator
+from typing import Literal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -317,47 +319,45 @@ from testcontainers.postgres import PostgresContainer
 
 from src.app import app
 from src.database import get_session
-from src.models import table_register
+from src.models import Base
 
 
 @pytest.fixture
-def anyio_backend() -> str:
+def anyio_backend() -> Literal['asyncio']:
     return 'asyncio'
-
 ```
 
 Now, in the `postgres_container`, the `anyio_backend` is passed, and all the tests that use the `postgres_container` as a fixture at any level will be marked to run asynchronously.
 
 Below is the `postgres_container` function, which will be responsible for creating the `PostgresContainer` instance from `testcontainers`. The `asyncpg` driver is passed as an argument to specify that it will be the driver used.
 
-```py title="tests/conftest.py" linenums="22"
+```py title="tests/conftest.py" linenums="23"
 @pytest.fixture
 def postgres_container(
-    anyio_backend: typing.Literal['asyncio']
-) -> typing.Generator[PostgresContainer, None, None]:
+    anyio_backend: Literal['asyncio'],
+) -> Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 ```
 
 The `async_session` takes the connection URL from the `PostgresContainer` object returned by the `postgres_container` function and uses it to create the tables inside the database, as well as the session that will handle all interactions with the PostgreSQL instance created. The function will return and persist a session to be used, and then restore the database for the next test by deleting the tables.
 
-```py title="tests/conftest.py" linenums="30"
+```py title="tests/conftest.py" linenums="31"
 @pytest.fixture
 async def async_session(
-    postgres_container: PostgresContainer
-) -> typing.AsyncGenerator[AsyncSession, None]:
-    async_db_url = postgres_container.get_connection_url()
-    async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
+    postgres_container: PostgresContainer,
+) -> AsyncGenerator[AsyncSession, None]:
+    db_url = postgres_container.get_connection_url()
+    async_engine = create_async_engine(db_url)
 
     async with async_engine.begin() as conn:
-        await conn.run_sync(table_register.metadata.drop_all)
-        await conn.run_sync(table_register.metadata.create_all)
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
     async_session = async_sessionmaker(
-        autoflush=False,
         bind=async_engine,
-        class_=AsyncSession,
         expire_on_commit=False,
+        class_=AsyncSession,
     )
 
     async with async_session() as session:
@@ -371,8 +371,8 @@ The last fixture is the `async_client` function, which will create the [`AsyncCl
 ```py title="tests/conftest.py" linenums="54"
 @pytest.fixture
 async def async_client(
-    async_session: AsyncSession
-) -> typing.AsyncGenerator[AsyncClient, None]:
+    async_session: AsyncSession,
+) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
 
@@ -492,16 +492,16 @@ Fixtures are created when first requested by a test and are destroyed based on t
 
 As we want to create just one Docker instance and reuse it for all the tests, we changed the `@pytest.fixture` in the `conftest.py` file in the following highlighted lines.
 
-```py title="conftest.py" linenums="17" hl_lines="1 6"
+```py title="conftest.py" linenums="18" hl_lines="1 6"
 @pytest.fixture(scope='session')
-def anyio_backend() -> str:
+def anyio_backend() -> Literal['asyncio']:
     return 'asyncio'
 
 
 @pytest.fixture(scope='session')
 def postgres_container(
-    anyio_backend: typing.Literal['asyncio']
-) -> typing.Generator[PostgresContainer, None, None]:
+    anyio_backend: Literal['asyncio'],
+) -> Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 
@@ -584,7 +584,8 @@ tests/test_routes.py::test_buy_ticket_when_already_sold PASSED          [100%]
 The final `conftest.py` is presented below:
 
 ```py title="tests/conftest.py" linenums="1"
-import typing
+from collections.abc import AsyncGenerator, Generator
+from typing import Literal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -597,38 +598,37 @@ from testcontainers.postgres import PostgresContainer
 
 from src.app import app
 from src.database import get_session
-from src.models import table_register
+from src.models import Base
 
 
 @pytest.fixture(scope='session')
-def anyio_backend() -> str:
+def anyio_backend() -> Literal['asyncio']:
     return 'asyncio'
 
 
 @pytest.fixture(scope='session')
 def postgres_container(
-    anyio_backend: typing.Literal['asyncio']
-) -> typing.Generator[PostgresContainer, None, None]:
+    anyio_backend: Literal['asyncio'],
+) -> Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 
 
 @pytest.fixture
 async def async_session(
-    postgres_container: PostgresContainer
-) -> typing.AsyncGenerator[AsyncSession, None]:
-    async_db_url = postgres_container.get_connection_url()
-    async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
+    postgres_container: PostgresContainer,
+) -> AsyncGenerator[AsyncSession, None]:
+    db_url = postgres_container.get_connection_url()
+    async_engine = create_async_engine(db_url)
 
     async with async_engine.begin() as conn:
-        await conn.run_sync(table_register.metadata.drop_all)
-        await conn.run_sync(table_register.metadata.create_all)
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
     async_session = async_sessionmaker(
-        autoflush=False,
         bind=async_engine,
-        class_=AsyncSession,
         expire_on_commit=False,
+        class_=AsyncSession,
     )
 
     async with async_session() as session:
@@ -639,8 +639,8 @@ async def async_session(
 
 @pytest.fixture
 async def async_client(
-    async_session: AsyncSession
-) -> typing.AsyncGenerator[AsyncClient, None]:
+    async_session: AsyncSession,
+) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
 
@@ -650,4 +650,5 @@ async def async_client(
         yield client
 
     app.dependency_overrides.clear()
+
 ```

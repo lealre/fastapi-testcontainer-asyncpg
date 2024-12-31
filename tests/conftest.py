@@ -1,4 +1,5 @@
-import typing
+from collections.abc import AsyncGenerator, Generator
+from typing import Literal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,18 +12,18 @@ from testcontainers.postgres import PostgresContainer
 
 from src.app import app
 from src.database import get_session
-from src.models import table_register
+from src.models import Base
 
 
 @pytest.fixture(scope='session')
-def anyio_backend() -> str:
+def anyio_backend() -> Literal['asyncio']:
     return 'asyncio'
 
 
 @pytest.fixture(scope='session')
 def postgres_container(
-    anyio_backend: typing.Literal['asyncio'],
-) -> typing.Generator[PostgresContainer, None, None]:
+    anyio_backend: Literal['asyncio'],
+) -> Generator[PostgresContainer, None, None]:
     with PostgresContainer('postgres:16', driver='asyncpg') as postgres:
         yield postgres
 
@@ -30,13 +31,13 @@ def postgres_container(
 @pytest.fixture
 async def async_session(
     postgres_container: PostgresContainer,
-) -> typing.AsyncGenerator[AsyncSession, None]:
-    async_db_url = postgres_container.get_connection_url()
-    async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
+) -> AsyncGenerator[AsyncSession, None]:
+    db_url = postgres_container.get_connection_url()
+    async_engine = create_async_engine(db_url)
 
     async with async_engine.begin() as conn:
-        await conn.run_sync(table_register.metadata.drop_all)
-        await conn.run_sync(table_register.metadata.create_all)
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
     async_session = async_sessionmaker(
         bind=async_engine,
@@ -53,7 +54,7 @@ async def async_session(
 @pytest.fixture
 async def async_client(
     async_session: AsyncSession,
-) -> typing.AsyncGenerator[AsyncClient, None]:
+) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = lambda: async_session
     _transport = ASGITransport(app=app)
 
